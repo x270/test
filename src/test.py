@@ -1,52 +1,50 @@
+import requests
 from lxml import etree
 import json
-import requests
-import xml.etree.ElementTree as ET
 
 def lambda_handler(event, context):
+    # URLをクエリパラメータから取得
+    url = event['queryStringParameters']['url']
+
     try:
-        # クエリパラメータからURLを取得
-        query_params = event.get("queryStringParameters", {})
-        url = query_params.get("url")
-
-        if not url:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "URL parameter is required"})
-            }
-
-        # RSSフィードを取得
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        # URLへGETリクエスト
+        response = requests.get(url)
+        response.raise_for_status()  # HTTPエラーをチェック
 
         # XMLをパース
-        parser = etree.XMLParser()
-        root = etree.fromstring(response.text, parser)
-        # root = ET.fromstring(response.text)
-        items = []
+        root = etree.fromstring(response.content)
 
-        for item in root.findall(".//item"):
-            parsed_item = {
-                "title": item.findtext("title"),
-                "link": item.findtext("link"),
-                "description": item.findtext("description"),
-                "pubDate": item.findtext("pubDate")
-            }
-            items.append(parsed_item)
+        # item要素を抽出
+        items = []
+        for item in root.findall('.//item'):
+            item_data = {}
+            for child in item:
+                item_data[child.tag] = child.text
+            items.append(item_data)
+
+        # JSONに変換
+        json_data = json.dumps(items, ensure_ascii=False)
 
         return {
-            "statusCode": 200,
-            "body": json.dumps(items),
-            "headers": {"Content-Type": "application/json"}
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json; charset=utf-8'
+            },
+            'body': json_data
         }
 
     except requests.exceptions.RequestException as e:
         return {
-            "statusCode": 500,
-            "body": json.dumps({"error": "Failed to fetch RSS", "details": str(e)})
+            'statusCode': 500,
+            'body': f'Error: {e}'
         }
-    except ET.ParseError:
+    except etree.XMLSyntaxError as e:
         return {
-            "statusCode": 500,
-            "body": json.dumps({"error": "Invalid RSS format"})
+            'statusCode': 500,
+            'body': f'Error: Invalid XML format: {e}'
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': f'Error: {e}'
         }
