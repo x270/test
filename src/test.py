@@ -21,8 +21,8 @@ def lambda_handler(event, context):
 
         # XMLをパース
         parser = etree.XMLParser()
-        document = etree.fromstring(response.text, parser)
-        root = ET.fromstring(response.text)
+        root = etree.fromstring(response.text, parser)
+        # root = ET.fromstring(response.text)
         items = []
 
         for item in root.findall(".//item"):
